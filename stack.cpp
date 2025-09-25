@@ -35,26 +35,34 @@ ErrorType StackPush(Stack* stk, ElementType value)
     return ERROR_NO;
 }
 
-ErrorType StackPop(Stack* stk, ElementType* value)
+ElementType StackPop(Stack* stk)
 {
     assert(stk);//TODO проверка на size>0
 
     size_t current_size = stk->size;
     stk->size = current_size - 1;
-    *value = stk -> data[current_size - 1];
 
-    return ERROR_NO;
+    int errors = StackVerification(*stk);
+    // printf("ERRORS: %d\n", errors);
+    StackDump(stk, errors, "govno zalupa penis her");
+
+    ElementType element = stk -> data[current_size - 1];
+
+    return element;
 }
 
-void StackDump(Stack* stk, ErrorType err, const char* msg)
+void StackDump(Stack* stk, int errors, const char* msg)
 {
     size_t stack_size =  stk->size;
     size_t stack_capacity = stk->capacity;
 
+    printf("stack [%p] %s (", stk, msg);
+    ErrorsParse(errors);
+
 #ifdef _DEBUG
-    printf("stack [%p] %s (Err%d) from %s at %s %d\n", stk, msg, err, stk->function_name, stk->file_name, stk->line);
+    printf("Err%d) from %s at %s %d\n", errors, stk->function_name, stk->file_name, stk->line);
 #else
-    printf("stack [%p] %s (Err%d)\n", stk, msg, err);
+    printf("Err%d)\n", errors);
 #endif
     printf("    {\n");
     printf("    size = %lu\n", stack_size);

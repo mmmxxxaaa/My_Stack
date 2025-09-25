@@ -27,8 +27,8 @@ int StackVerification(Stack stack);
 int ErrorsParse(int errors); //FIXME парсер ошибки
 
 ErrorType StackPush(Stack* stk, ElementType value);
-ErrorType StackPop(Stack* stk, ElementType* value);
-void StackDump(Stack* stk, ErrorType err, const char* msg);
+ElementType StackPop(Stack* stk);
+void StackDump(Stack* stk, int errors, const char* msg);
 
 
 #endif // MY_STACK_H_
