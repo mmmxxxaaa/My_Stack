@@ -5,9 +5,10 @@
 #include <stdio.h>
 
 #include "error_types.h"
-//FIXME должен ли выводиться результат в консоль?
+
 static const int kCanareika = 25022007;
 static const int kPoison = 525252;
+static const int grow_data_coefficient = 2;
 
 
 void PrintElement(ElementType element)
@@ -15,47 +16,93 @@ void PrintElement(ElementType element)
     printf("%d", element);
 }
 
-void StackCtor(Stack* stack_pointer, size_t starting_capacity) //FIXME как проинициализировать все элементы data пойзон значением, отличным от 0?
+int StackCtor(Stack* stack_pointer, size_t starting_capacity) //FIXME как проинициализировать все элементы data пойзон значением, отличным от 0?
 {
-    assert(stack_pointer);
+    assert(stack_pointer); //FIXME верификатор в начале вместо ассертов и вызывать верификатор по указателю, а в нём проверить указатель на нуль
     assert(starting_capacity > 0);
 
     stack_pointer -> data = (ElementType*) calloc(starting_capacity + 2, sizeof(ElementType)); //проверить указатель выданный каллокок
     if (stack_pointer -> data == NULL)
-        return; //FIXME нормально обработать это
+        return ERROR_ALLOCATION_FAILED; //FIXME нормально обработать это
 
     stack_pointer -> data[0] = kCanareika;
+    stack_pointer -> data[starting_capacity + 1] = kCanareika;
     for (size_t run_index = 1; run_index <= starting_capacity; run_index++)
         stack_pointer -> data[run_index] = kPoison;
-    stack_pointer -> data[starting_capacity + 1] = kCanareika;
-    stack_pointer -> size = 1;
+    stack_pointer -> data = stack_pointer -> data + 1;
+    stack_pointer -> size = 0;
     stack_pointer -> capacity = starting_capacity;
-    int errors = StackVerification(*stack_pointer); //норм что передаю разыменованный стек?
-    if (errors != 0)
-    {
-        StackDump(stack_pointer, errors, "construction failed");
-        // abort();
-    }
+
+    return 0;
+    // int errors = StackVerification(*stack_pointer); //FIXME норм что передаю разыменованный стек?
+    // if (errors != 0)
+    // {
+        // StackDump(stack_pointer, errors, "construction failed");
+    //     // abort();
+    //     //FIXME - return ошибки сделай чееееел
+    // }
 }
 
 void StackDtor(Stack* stack_pointer)
 {
+// FIXME - вызов верификатора вместо ассерта - везде
     assert(stack_pointer != NULL);
 
-    free(stack_pointer -> data);
-    stack_pointer -> data = NULL;
-    stack_pointer -> size = 0;
-    stack_pointer -> capacity = 0;
+// FIXME - free if not null
+    if (stack_pointer -> data)
+    {
+        free(stack_pointer -> data - 1);
+        stack_pointer -> data = NULL;
+        stack_pointer -> size = 0;
+        stack_pointer -> capacity = 0;
+    }
 }
 
-ErrorType StackPush(Stack* stk, ElementType value)
+int StackPush(Stack* stk, ElementType value)
 {
     assert(stk); //пока ассерт, но надо написать верификатор
     //TODO написать реаллокацию data в случае, если переполняем массив
 
-    stk -> data[stk->size++] = value;
+    int errors = StackVerification(stk);
+    if (errors != 0)
+        return errors;
+    if (stk->size == stk->capacity)
+    {
+        size_t new_capacity = (stk->capacity == 0) ? 1 : stk->capacity * 2;
 
-    return ERROR_NO;
+        size_t total_size = (new_capacity + 2) * sizeof(ElementType);
+        ElementType* new_memory = (ElementType*) realloc(stk->data - 1, total_size);
+        if (new_memory == NULL)
+            return ERROR_REALLOCATION;
+
+        new_memory[0] = kCanareika;
+        new_memory[new_capacity + 1] = kCanareika;
+
+        // ИНИЦИАЛИЗИРУЕМ НОВЫЕ POISONЫ
+        for (size_t i = stk->capacity + 1; i <= new_capacity; i++)
+            new_memory[i] = kPoison;
+
+        stk->data = new_memory + 1;
+        stk->capacity = new_capacity;
+    }
+
+    stk -> data[stk->size++] = value;
+    return 0;
+//     if (current_size == current_capacity) //FIXME разобраться с санитайзером
+//         {// FIXME - Func Resize
+//             size_t new_capacity = current_capacity * grow_data_coefficient;
+//             ElementType* check_buf = (ElementType*) realloc(stk->data, new_capacity * sizeof(ElementType));
+//             if (check_buf == NULL)
+//             {
+//                 //шо тут
+//                 errors += ERROR_REALLOCATING;
+//                 return errors;
+//             }
+//
+//             stk->data = check_buf;
+//             stk->capacity = new_capacity;
+//         }
+//     // FIXME - Canary to the end
 }
 
 ElementType StackPop(Stack* stk)//ДЕЛО СДЕЛАНО нужно ли изменять значение с бывшего на kPoison у элемента, который попнули
@@ -64,9 +111,9 @@ ElementType StackPop(Stack* stk)//ДЕЛО СДЕЛАНО нужно ли изм
 
     size_t current_size = stk->size;
 
-    int errors = StackVerification(*stk);
-    if (current_size == 1)  //FIXME я же это никак не внесу в верификатор (когда в массиве только канарейка)
-    {
+    int errors = StackVerification(stk);
+    if (current_size == 0)  //FIXME я же это никак не внесу в верификатор (когда в массиве только канарейка)
+    { //FIXME current_size == 0 должно быть
         // printf("%lu\n", current_size);
         // printf("%d\n\n", errors);
         errors += ERROR_POP_WHEN_SIZE_ZERO;
@@ -77,23 +124,25 @@ ElementType StackPop(Stack* stk)//ДЕЛО СДЕЛАНО нужно ли изм
 
     ElementType element = stk -> data[current_size - 1];
     stk -> data[current_size - 1] = kPoison;
-    stk->size = current_size - 1;
+    stk -> size = current_size - 1;
 
-    errors = StackVerification(*stk);
+    errors = StackVerification(stk);
     if (errors != 0)
         StackDump(stk, errors, "cannot Pop the element"); //если случилась ошибка (верификатор о ней сообщил), то я вызываю стекдамп и abort()?
 
     return element;
 }
+// FIXME - Канарейка под условной компиляцией
 //ДЕЛО СДЕЛАНО какая-то пизда с size, какого хуя он на 1 больше
 void StackDump(const Stack* stk, int errors, const char* msg)
 {
     assert(stk != NULL);
     assert(msg != NULL);
-
-    size_t stack_size_with_left_canareika =  stk->size;
-    size_t stack_size_only_elements =  stack_size_with_left_canareika - 1;
-    size_t stack_capacity = stk->capacity + 2; //почему тут +2, а не в конструкторе
+    // ВАЖНО: data сдвинут на 1 элемент вправо от начала выделенной памяти
+    // Поэтому левая канарейка находится по data[-1], правая - по data[capacity]
+    ElementType* real_data_start = stk->data - 1;
+    size_t stack_size_only_elements = stk->size;
+    size_t stack_capacity = stk->capacity;
 
     printf("stack [%p] %s (", stk, msg);
     ErrorsParse(errors);
@@ -106,67 +155,73 @@ void StackDump(const Stack* stk, int errors, const char* msg)
     printf("    {\n");
     printf("    size = %lu\n", stack_size_only_elements);
     printf("    capacity=%lu\n", stack_capacity);
-    printf("    data [%p]\n", stk->data);
+    printf("    data [%p]\n", real_data_start);
     printf("        {\n");
 
-    size_t i = 0;
-    printf("         [%lu] = ", i);
-    PrintElement(stk->data[i++]);
+    printf("         [0] = ");
+    PrintElement(real_data_start[0]);
     printf(" (LEFT CANAREIKA)\n");
 
-    for (; i < stack_size_with_left_canareika; i++)
+    for (size_t i = 0; i < stack_size_only_elements; i++)
     {
         // (решил) если поменяем тип (ElementType), то тут вместо %d нужно будет другой спецификатор писать, что делать?
-        printf("        *[%lu] = ", i);
+        printf("        *[%lu] = ", i + 1); // +1 потому что реальные индексы с 1
         PrintElement(stk->data[i]);
-        printf("\n"); //putc?
+        printf("\n");
     }
-    for (; i>= stack_size_with_left_canareika && i < stack_capacity - 1; i++)
+    for (size_t i = stack_size_only_elements; i < stack_capacity; i++)
     {
-        printf("         [%lu] = ", i);
+        printf("         [%lu] = ", i + 1); // +1 потому что реальные индексы с 1
         PrintElement(stk->data[i]);
         printf(" (POISON)\n");
     }
 
-    printf("         [%lu] = ", i);
-    PrintElement(stk->data[i]);
+    printf("         [%lu] = ", stack_capacity + 1);
+    PrintElement(stk->data[stack_capacity]);
     printf(" (RIGHT CANAREIKA)\n");
 
     printf("        }\n");
     printf("}\n");
 }
 
-int StackVerification(Stack stack)
-{
+int StackVerification(Stack* stack)
+{// FIXME - Принимать указатель и проверять на нулл
+    if (stack == NULL)
+        return ERROR_NULL_PTR;
+
     int errors = 0;
 #ifdef _DEBUG
-    if (stack.function_name == NULL)
+    if (stack -> function_name == NULL)
         errors += ERROR_PTR_FUNCTION_NAME;
 
-    if (stack.line == 0)
+    if (stack -> line == 0)
         errors += ERROR_PTR_NUMBER_LINE;
 
-    if (stack.file_name == NULL)
+    if (stack -> file_name == NULL)
         errors += ERROR_PTR_FILE_NAME;
 
-    if (stack.variable_name == NULL)
+    if (stack -> variable_name == NULL)
         errors += ERROR_PTR_VARIABLE_NAME;
 #endif
-    if (stack.data == NULL)
-        errors += ERROR_PTR_DATA;
-    else
+    if (stack -> data == NULL)
     {
-        if (stack.data[stack.capacity + 1] != kCanareika) //если data = null, то эти проверки положат программу, надо бы их внутрь проверки на null засунуть
-        errors += ERROR_RIGHT_CANAREIKA_DAMAGED;
-
-        if (stack.data[0] != kCanareika)
-        errors += ERROR_LEFT_CANAREIKA_DAMAGED;
+        errors += ERROR_PTR_DATA;
+        return errors; //дальше нечего проверять
     }
 
-    if (stack.capacity == 0)
+    if (stack -> capacity == 0)
+    {
         errors += ERROR_CAPACITY_NUMBER;
+        return errors; //дальше нечего проверять
+    }
+    //FIXME канарейки
+    if (stack -> data[stack->capacity] != kCanareika) //если data = null, то эти проверки положат программу, надо бы их внутрь проверки на null засунуть
+        errors += ERROR_RIGHT_CANAREIKA_DAMAGED;
 
-    if (stack.size > stack.capacity)
+    if (stack -> data[-1] != kCanareika) //ваще пиздец))
+        errors += ERROR_LEFT_CANAREIKA_DAMAGED;
+
+    if (stack->size > stack->capacity)
         errors += ERROR_SIZE_NUMBER;
 
     return errors;
@@ -174,7 +229,7 @@ int StackVerification(Stack stack)
 
 int ErrorsParse(int errors)
 {
-#define CHECKING_ERROR(s)  // заменяет две строки с ифом на одну
+#define CHECKING_ERROR(s)  // FIXME заменяет две строки с ифом на одну
     if (errors == 0)
         return 0;
     if (errors & ERROR_PTR_FUNCTION_NAME)

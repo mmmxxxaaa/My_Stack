@@ -12,7 +12,11 @@ typedef enum {
     ERROR_CAPACITY_NUMBER         = 1 << 6,
     ERROR_POP_WHEN_SIZE_ZERO      = 1 << 7,
     ERROR_RIGHT_CANAREIKA_DAMAGED = 1 << 8,
-    ERROR_LEFT_CANAREIKA_DAMAGED  = 1 << 9
+    ERROR_LEFT_CANAREIKA_DAMAGED  = 1 << 9,
+    ERROR_REALLOCATING            = 1 << 10,
+    ERROR_ALLOCATION_FAILED       = 1 << 11,
+    ERROR_REALLOCATION            = 1 << 12,
+    ERROR_NULL_PTR                = 1 << 13
 } ErrorType;
 
 #endif // ERROR_TYPES_H_

@@ -29,13 +29,13 @@ typedef struct {
 
 
 void PrintElement(ElementType element);
-void StackCtor(Stack* stack_pointer, size_t starting_capacity);
+int StackCtor(Stack* stack_pointer, size_t starting_capacity);
 void StackDtor(Stack* stack_pointer);
 
-int StackVerification(Stack stack);
+int StackVerification(Stack* stack);
 int ErrorsParse(int errors); //FIXME парсер ошибки
 
-ErrorType StackPush(Stack* stk, ElementType value);
+int StackPush(Stack* stk, ElementType value);
 ElementType StackPop(Stack* stk);
 void StackDump(const Stack* stk, int errors, const char* msg);
 
