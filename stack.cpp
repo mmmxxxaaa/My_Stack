@@ -16,39 +16,39 @@ void PrintElement(ElementType element)
     printf("%d", element);
 }
 
-int StackCtor(Stack* stack_pointer, size_t starting_capacity) //FIXME как проинициализировать все элементы data пойзон значением, отличным от 0?
+void StackCtor(Stack* stack_pointer, size_t starting_capacity)
 {
-    assert(stack_pointer); //FIXME верификатор в начале вместо ассертов и вызывать верификатор по указателю, а в нём проверить указатель на нуль
+    assert(stack_pointer); //FIXME ТУТ ПРИШЛОСЬ ОСТАВИТЬ ПОКА АССЕРТ ВМЕСТО ВЕРИФИКАТОРА, Т.К. ИНИЦИАЛИЗИРОВАННАЯ ВЕРСИЯ СОВПАДАЕТ С ОШИБОЧНОЙ
     assert(starting_capacity > 0);
 
-    stack_pointer -> data = (ElementType*) calloc(starting_capacity + 2, sizeof(ElementType)); //проверить указатель выданный каллокок
+    stack_pointer -> data = (ElementType*) calloc(starting_capacity + 2, sizeof(ElementType));
     if (stack_pointer -> data == NULL)
-        return ERROR_ALLOCATION_FAILED; //FIXME нормально обработать это
+    {
+        int errors = ERROR_ALLOCATION_FAILED;
+        StackDump(stack_pointer, errors, "Allocating memory in StackCtor failed");
+        return;
+    }
 
     stack_pointer -> data[0] = kCanareika;
     stack_pointer -> data[starting_capacity + 1] = kCanareika;
+
     for (size_t run_index = 1; run_index <= starting_capacity; run_index++)
         stack_pointer -> data[run_index] = kPoison;
     stack_pointer -> data = stack_pointer -> data + 1;
     stack_pointer -> size = 0;
     stack_pointer -> capacity = starting_capacity;
-
-    return 0;
-    // int errors = StackVerification(*stack_pointer); //FIXME норм что передаю разыменованный стек?
-    // if (errors != 0)
-    // {
-        // StackDump(stack_pointer, errors, "construction failed");
-    //     // abort();
-    //     //FIXME - return ошибки сделай чееееел
-    // }
 }
 
 void StackDtor(Stack* stack_pointer)
 {
 // FIXME - вызов верификатора вместо ассерта - везде
-    assert(stack_pointer != NULL);
+    int errors = StackVerification(stack_pointer); //ассерт не нужен, т.к. верификатор проверяет указатель
+    if (errors != 0)
+    {
+        StackDump(stack_pointer, errors, "StackDtor failed");
+        return;
+    }
 
-// FIXME - free if not null
     if (stack_pointer -> data)
     {
         free(stack_pointer -> data - 1);
@@ -58,69 +58,44 @@ void StackDtor(Stack* stack_pointer)
     }
 }
 
-int StackPush(Stack* stk, ElementType value)
+void StackPush(Stack* stk, ElementType value)
 {
-    assert(stk); //пока ассерт, но надо написать верификатор
-    //TODO написать реаллокацию data в случае, если переполняем массив
-
-    int errors = StackVerification(stk);
+    int errors = StackVerification(stk); //ассерт не нужен, т.к. верификатор проверяет указатель
     if (errors != 0)
-        return errors;
+    {
+        StackDump(stk, errors, "StackPush failed");
+        return;
+    }
     if (stk->size == stk->capacity)
     {
-        size_t new_capacity = (stk->capacity == 0) ? 1 : stk->capacity * 2;
-
-        size_t total_size = (new_capacity + 2) * sizeof(ElementType);
-        ElementType* new_memory = (ElementType*) realloc(stk->data - 1, total_size);
-        if (new_memory == NULL)
-            return ERROR_REALLOCATION;
-
-        new_memory[0] = kCanareika;
-        new_memory[new_capacity + 1] = kCanareika;
-
-        // ИНИЦИАЛИЗИРУЕМ НОВЫЕ POISONЫ
-        for (size_t i = stk->capacity + 1; i <= new_capacity; i++)
-            new_memory[i] = kPoison;
-
-        stk->data = new_memory + 1;
-        stk->capacity = new_capacity;
+        errors = ResizeBuffer(stk);
+        if (errors != 0)
+        {
+            StackDump(stk, errors, "Reallocating in StackPush failed");
+            return;
+        }
     }
 
     stk -> data[stk->size++] = value;
-    return 0;
-//     if (current_size == current_capacity) //FIXME разобраться с санитайзером
-//         {// FIXME - Func Resize
-//             size_t new_capacity = current_capacity * grow_data_coefficient;
-//             ElementType* check_buf = (ElementType*) realloc(stk->data, new_capacity * sizeof(ElementType));
-//             if (check_buf == NULL)
-//             {
-//                 //шо тут
-//                 errors += ERROR_REALLOCATING;
-//                 return errors;
-//             }
-//
-//             stk->data = check_buf;
-//             stk->capacity = new_capacity;
-//         }
-//     // FIXME - Canary to the end
 }
 
-ElementType StackPop(Stack* stk)//ДЕЛО СДЕЛАНО нужно ли изменять значение с бывшего на kPoison у элемента, который попнули
+ElementType StackPop(Stack* stk)
 {
-    assert(stk);
+    int errors = StackVerification(stk);
+    if (errors != 0)
+    {
+        StackDump(stk, errors, "StackPop failed");
+        return kPoison;
+    }
 
     size_t current_size = stk->size;
-
-    int errors = StackVerification(stk);
-    if (current_size == 0)  //FIXME я же это никак не внесу в верификатор (когда в массиве только канарейка)
-    { //FIXME current_size == 0 должно быть
-        // printf("%lu\n", current_size);
-        // printf("%d\n\n", errors);
+    if (current_size == 0)
         errors += ERROR_POP_WHEN_SIZE_ZERO;
-    }
-    // printf("%d\n\n", errors);
     if (errors != 0)
-        StackDump(stk, errors, "cannot Pop the element"); //если случилась ошибка (верификатор о ней сообщил), то я вызываю стекдамп и abort()?
+    {
+        StackDump(stk, errors, "There is NO ELEMENT in stack to pop");
+        return kPoison;
+    }
 
     ElementType element = stk -> data[current_size - 1];
     stk -> data[current_size - 1] = kPoison;
@@ -128,18 +103,20 @@ ElementType StackPop(Stack* stk)//ДЕЛО СДЕЛАНО нужно ли изм
 
     errors = StackVerification(stk);
     if (errors != 0)
-        StackDump(stk, errors, "cannot Pop the element"); //если случилась ошибка (верификатор о ней сообщил), то я вызываю стекдамп и abort()?
+    {
+        StackDump(stk, errors, "cannot Pop the element");
+        return kPoison;
+    }
 
     return element;
 }
 // FIXME - Канарейка под условной компиляцией
-//ДЕЛО СДЕЛАНО какая-то пизда с size, какого хуя он на 1 больше
 void StackDump(const Stack* stk, int errors, const char* msg)
 {
     assert(stk != NULL);
     assert(msg != NULL);
-    // ВАЖНО: data сдвинут на 1 элемент вправо от начала выделенной памяти
-    // Поэтому левая канарейка находится по data[-1], правая - по data[capacity]
+
+    // левая канарейка находится по data[-1], а правая по data[capacity]
     ElementType* real_data_start = stk->data - 1;
     size_t stack_size_only_elements = stk->size;
     size_t stack_capacity = stk->capacity;
@@ -164,7 +141,6 @@ void StackDump(const Stack* stk, int errors, const char* msg)
 
     for (size_t i = 0; i < stack_size_only_elements; i++)
     {
-        // (решил) если поменяем тип (ElementType), то тут вместо %d нужно будет другой спецификатор писать, что делать?
         printf("        *[%lu] = ", i + 1); // +1 потому что реальные индексы с 1
         PrintElement(stk->data[i]);
         printf("\n");
@@ -185,7 +161,7 @@ void StackDump(const Stack* stk, int errors, const char* msg)
 }
 
 int StackVerification(Stack* stack)
-{// FIXME - Принимать указатель и проверять на нулл
+{
     if (stack == NULL)
         return ERROR_NULL_PTR;
 
@@ -214,7 +190,7 @@ int StackVerification(Stack* stack)
         errors += ERROR_CAPACITY_NUMBER;
         return errors; //дальше нечего проверять
     }
-    //FIXME канарейки
+    //FIXME канарейки в условную компиляцию
     if (stack -> data[stack->capacity] != kCanareika) //если data = null, то эти проверки положат программу, надо бы их внутрь проверки на null засунуть
         errors += ERROR_RIGHT_CANAREIKA_DAMAGED;
 
@@ -256,4 +232,25 @@ int ErrorsParse(int errors)
 #undef CHECKING_ERROR
 }
 
+
+int ResizeBuffer(Stack* stk)
+{
+    size_t new_capacity = (stk->capacity == 0) ? 1 : stk->capacity * 2;
+
+    size_t total_size = (new_capacity + 2) * sizeof(ElementType);
+    ElementType* new_memory = (ElementType*) realloc(stk->data - 1, total_size);
+    if (new_memory == NULL)
+        return ERROR_REALLOCATION;
+
+    new_memory[0] = kCanareika;
+    new_memory[new_capacity + 1] = kCanareika;
+
+    // ИНИЦИАЛИЗИРУЕМ НОВЫЕ POISONЫ
+    for (size_t i = stk->capacity + 1; i <= new_capacity; i++)
+        new_memory[i] = kPoison;
+
+    stk->data = new_memory + 1;
+    stk->capacity = new_capacity;
+    return 0;
+}
 
