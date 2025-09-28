@@ -10,18 +10,18 @@ static const int kCanareika = 25022007;
 static const int kPoison = 525252;
 static const int grow_data_coefficient = 2;
 
-
-void PrintElement(ElementType element)
-{
-    printf("%d", element);
-}
+#ifdef _DEBUG
+    #define ON_DEBUG(code)  code //не заигрываться с этим
+#else
+    #define ON_DEBUG(code)
+#endif
 
 void StackCtor(Stack* stack_pointer, size_t starting_capacity)
 {
     assert(stack_pointer); //FIXME ТУТ ПРИШЛОСЬ ОСТАВИТЬ ПОКА АССЕРТ ВМЕСТО ВЕРИФИКАТОРА, Т.К. ИНИЦИАЛИЗИРОВАННАЯ ВЕРСИЯ СОВПАДАЕТ С ОШИБОЧНОЙ
     assert(starting_capacity > 0);
 
-    stack_pointer -> data = (ElementType*) calloc(starting_capacity + 2, sizeof(ElementType));
+    stack_pointer -> data = (ElementType*) calloc(starting_capacity + ON_DEBUG (2) +0, sizeof(ElementType)); //+0 воспринимается просто как 0
     if (stack_pointer -> data == NULL)
     {
         int errors = ERROR_ALLOCATION_FAILED;
@@ -34,6 +34,7 @@ void StackCtor(Stack* stack_pointer, size_t starting_capacity)
 
     for (size_t run_index = 1; run_index <= starting_capacity; run_index++)
         stack_pointer -> data[run_index] = kPoison;
+
     stack_pointer -> data = stack_pointer -> data + 1;
     stack_pointer -> size = 0;
     stack_pointer -> capacity = starting_capacity;
@@ -41,7 +42,6 @@ void StackCtor(Stack* stack_pointer, size_t starting_capacity)
 
 void StackDtor(Stack* stack_pointer)
 {
-// FIXME - вызов верификатора вместо ассерта - везде
     int errors = StackVerification(stack_pointer); //ассерт не нужен, т.к. верификатор проверяет указатель
     if (errors != 0)
     {
@@ -50,12 +50,10 @@ void StackDtor(Stack* stack_pointer)
     }
 
     if (stack_pointer -> data)
-    {
         free(stack_pointer -> data - 1);
-        stack_pointer -> data = NULL;
-        stack_pointer -> size = 0;
-        stack_pointer -> capacity = 0;
-    }
+    stack_pointer -> data = NULL;
+    stack_pointer -> size = 0;
+    stack_pointer -> capacity = 0;
 }
 
 void StackPush(Stack* stk, ElementType value)
@@ -110,11 +108,16 @@ ElementType StackPop(Stack* stk)
 
     return element;
 }
-// FIXME - Канарейка под условной компиляцией
+
 void StackDump(const Stack* stk, int errors, const char* msg)
 {
-    assert(stk != NULL);
     assert(msg != NULL);
+
+    if (stk == NULL)
+    {
+        printf("stack [%p] %s (", stk, msg);
+        return;
+    }
 
     // левая канарейка находится по data[-1], а правая по data[capacity]
     ElementType* real_data_start = stk->data - 1;
@@ -124,7 +127,7 @@ void StackDump(const Stack* stk, int errors, const char* msg)
     printf("stack [%p] %s (", stk, msg);
     ErrorsParse(errors);
 
-#ifdef _DEBUG
+#ifdef _DEBUG //FIXME написать функцию перевода числа в двоичный вид, чтобы выводить
     printf("Err%d) from %s at %s %d\n", errors, stk->function_name, stk->file_name, stk->line);
 #else
     printf("Err%d)\n", errors); //выводить ошибки в двоичном виде
@@ -208,22 +211,16 @@ int ErrorsParse(int errors)
 #define CHECKING_ERROR(s)  // FIXME заменяет две строки с ифом на одну
     if (errors == 0)
         return 0;
-    if (errors & ERROR_PTR_FUNCTION_NAME)
-        printf("ERROR_PTR_FUNCTION_NAME ");
-    if (errors & ERROR_PTR_NUMBER_LINE)
-        printf("ERROR_PTR_NUMBER_LINE ");
-    if (errors & ERROR_PTR_FILE_NAME)
-        printf("ERROR_PTR_FILE_NAME ");
-    if (errors & ERROR_PTR_VARIABLE_NAME)
-        printf("ERROR_PTR_VARIABLE_NAME ");
-    if (errors & ERROR_PTR_DATA)
-        printf("ERROR_PTR_DATA ");
-    if (errors & ERROR_SIZE_NUMBER)
-        printf("ERROR_SIZE_NUMBER ");
-    if (errors & ERROR_CAPACITY_NUMBER)
-        printf("ERROR_CAPACITY_NUMBER ");
-    if (errors & ERROR_POP_WHEN_SIZE_ZERO)
-        printf("ERROR_POP_WHEN_SIZE_ZERO ");
+
+    if (errors & ERROR_PTR_FUNCTION_NAME)  printf("ERROR_PTR_FUNCTION_NAME ");
+    if (errors & ERROR_PTR_NUMBER_LINE)    printf("ERROR_PTR_NUMBER_LINE ");
+    if (errors & ERROR_PTR_FILE_NAME)      printf("ERROR_PTR_FILE_NAME ");
+    if (errors & ERROR_PTR_VARIABLE_NAME)  printf("ERROR_PTR_VARIABLE_NAME ");
+    if (errors & ERROR_PTR_DATA)           printf("ERROR_PTR_DATA ");
+    if (errors & ERROR_SIZE_NUMBER)        printf("ERROR_SIZE_NUMBER ");
+    if (errors & ERROR_CAPACITY_NUMBER)    printf("ERROR_CAPACITY_NUMBER ");
+    if (errors & ERROR_POP_WHEN_SIZE_ZERO) printf("ERROR_POP_WHEN_SIZE_ZERO ");
+
     if (errors & ERROR_RIGHT_CANAREIKA_DAMAGED)
         printf("ERROR_RIGHT_CANAREIKA_DAMAGED ");
     if (errors & ERROR_LEFT_CANAREIKA_DAMAGED)
@@ -254,3 +251,13 @@ int ResizeBuffer(Stack* stk)
     return 0;
 }
 
+void PrintElement(ElementType element)
+{
+    printf("%d", element);
+}
+
+//ПОБИТОВЫЕ ОПЕРАЦИИ ВМЕСТО +=
+//написать мейн, показывающий различные ошибки
+//доделать условную компиляцию канареек
+//сделать хэши
+//поменяться кодом с Умаром

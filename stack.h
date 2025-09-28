@@ -7,7 +7,6 @@
 
 #ifdef _DEBUG
     #define INIT(name) Stack name = {__func__, __LINE__, __FILE__, #name, NULL, 0, 0}
-    // INIT(stk1); //Всё время ссылается на эту строку при дампе, как будто херня какая-то
 #else
     #define INIT(name) Stack name = {};
 #endif
@@ -27,8 +26,6 @@ typedef struct {
 
 } Stack;
 
-
-void PrintElement(ElementType element);
 void StackCtor(Stack* stack_pointer, size_t starting_capacity);
 void StackDtor(Stack* stack_pointer);
 
@@ -39,6 +36,8 @@ void StackPush(Stack* stk, ElementType value);
 ElementType StackPop(Stack* stk);
 void StackDump(const Stack* stk, int errors, const char* msg);
 int ResizeBuffer(Stack* stk);
+
+void PrintElement(ElementType element);
 
 
 #endif // MY_STACK_H_
