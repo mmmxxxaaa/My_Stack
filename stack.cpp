@@ -10,10 +10,10 @@ static const int kCanareika = 25022007;
 static const int kPoison = 525252;
 static const int grow_data_coefficient = 2;
 
-#ifdef _DEBUG
-    #define ON_DEBUG(code)  code //не заигрываться с этим
+#ifdef _DEBUG_CANARY
+    #define ON_DEBUG_CANARY(code)  code //не заигрываться с этим
 #else
-    #define ON_DEBUG(code)
+    #define ON_DEBUG_CANARY(code)
 #endif
 
 void StackCtor(Stack* stack_pointer, size_t starting_capacity)
@@ -21,7 +21,7 @@ void StackCtor(Stack* stack_pointer, size_t starting_capacity)
     assert(stack_pointer); //FIXME ТУТ ПРИШЛОСЬ ОСТАВИТЬ ПОКА АССЕРТ ВМЕСТО ВЕРИФИКАТОРА, Т.К. ИНИЦИАЛИЗИРОВАННАЯ ВЕРСИЯ СОВПАДАЕТ С ОШИБОЧНОЙ
     assert(starting_capacity > 0);
 
-    stack_pointer -> data = (ElementType*) calloc(starting_capacity + ON_DEBUG (2) +0, sizeof(ElementType)); //+0 воспринимается просто как 0
+    stack_pointer -> data = (ElementType*) calloc(starting_capacity + ON_DEBUG_CANARY (2) +0, sizeof(ElementType)); //+0 воспринимается просто как 0
     if (stack_pointer -> data == NULL)
     {
         int errors = ERROR_ALLOCATION_FAILED;
@@ -29,6 +29,7 @@ void StackCtor(Stack* stack_pointer, size_t starting_capacity)
         return;
     }
 
+#ifdef _DEBUG_CANARY
     stack_pointer -> data[0] = kCanareika;
     stack_pointer -> data[starting_capacity + 1] = kCanareika;
 
@@ -36,6 +37,10 @@ void StackCtor(Stack* stack_pointer, size_t starting_capacity)
         stack_pointer -> data[run_index] = kPoison;
 
     stack_pointer -> data = stack_pointer -> data + 1;
+#else
+    for (size_t run_index = 0; run_index < starting_capacity; run_index++)
+        stack_pointer -> data[run_index] = kPoison;
+#endif // _DEBUG_CANARY
     stack_pointer -> size = 0;
     stack_pointer -> capacity = starting_capacity;
 }
@@ -50,7 +55,13 @@ void StackDtor(Stack* stack_pointer)
     }
 
     if (stack_pointer -> data)
+    {
+#ifdef _DEBUG_CANARY
         free(stack_pointer -> data - 1);
+#else
+        free(stack_pointer -> data);
+#endif // _DEBUG_CANARY
+    }
     stack_pointer -> data = NULL;
     stack_pointer -> size = 0;
     stack_pointer -> capacity = 0;
@@ -88,9 +99,8 @@ ElementType StackPop(Stack* stk)
 
     size_t current_size = stk->size;
     if (current_size == 0)
-        errors += ERROR_POP_WHEN_SIZE_ZERO;
-    if (errors != 0)
     {
+        errors = ERROR_POP_WHEN_SIZE_ZERO;
         StackDump(stk, errors, "There is NO ELEMENT in stack to pop");
         return kPoison;
     }
@@ -127,11 +137,11 @@ void StackDump(const Stack* stk, int errors, const char* msg)
     printf("stack [%p] %s (", stk, msg);
     ErrorsParse(errors);
 
-#ifdef _DEBUG //FIXME написать функцию перевода числа в двоичный вид, чтобы выводить
-    printf("Err%d) from %s at %s %d\n", errors, stk->function_name, stk->file_name, stk->line);
+#ifdef _DEBUG_CANARY //FIXME написать функцию перевода числа в двоичный вид, чтобы выводить
+    printf("Err%d) from %s at %s %d\n", errors, stk->debug.function_name, stk->debug.file_name, stk->debug.line);
 #else
     printf("Err%d)\n", errors); //выводить ошибки в двоичном виде
-#endif
+#endif //_DEBUG_CANARY
     printf("    {\n");
     printf("    size = %lu\n", stack_size_only_elements);
     printf("    capacity=%lu\n", stack_capacity);
@@ -169,39 +179,41 @@ int StackVerification(Stack* stack)
         return ERROR_NULL_PTR;
 
     int errors = 0;
-#ifdef _DEBUG
-    if (stack -> function_name == NULL)
-        errors += ERROR_PTR_FUNCTION_NAME;
+#ifdef _DEBUG_CANARY
+    if (stack -> debug.function_name == NULL)
+        errors |= ERROR_PTR_FUNCTION_NAME;
 
-    if (stack -> line == 0)
-        errors += ERROR_PTR_NUMBER_LINE;
+    if (stack -> debug.line == 0)
+        errors |= ERROR_PTR_NUMBER_LINE;
 
-    if (stack -> file_name == NULL)
-        errors += ERROR_PTR_FILE_NAME;
+    if (stack -> debug.file_name == NULL)
+        errors |= ERROR_PTR_FILE_NAME;
 
-    if (stack -> variable_name == NULL)
-        errors += ERROR_PTR_VARIABLE_NAME;
-#endif
+    if (stack -> debug.variable_name == NULL)
+        errors |= ERROR_PTR_VARIABLE_NAME;
+
+    //FIXME канарейки в условную компиляцию
+    if (stack -> data[stack->capacity] != kCanareika) //если data = null, то эти проверки положат программу, надо бы их внутрь проверки на null засунуть
+        errors |= ERROR_RIGHT_CANAREIKA_DAMAGED;
+
+    if (stack -> data[-1] != kCanareika) //ваще пиздец))
+        errors |= ERROR_LEFT_CANAREIKA_DAMAGED;
+#endif //_DEBUG_CANARY
     if (stack -> data == NULL)
     {
-        errors += ERROR_PTR_DATA;
+        errors |= ERROR_PTR_DATA;
         return errors; //дальше нечего проверять
     }
 
     if (stack -> capacity == 0)
     {
-        errors += ERROR_CAPACITY_NUMBER;
+        errors |= ERROR_CAPACITY_NUMBER;
         return errors; //дальше нечего проверять
     }
-    //FIXME канарейки в условную компиляцию
-    if (stack -> data[stack->capacity] != kCanareika) //если data = null, то эти проверки положат программу, надо бы их внутрь проверки на null засунуть
-        errors += ERROR_RIGHT_CANAREIKA_DAMAGED;
 
-    if (stack -> data[-1] != kCanareika) //ваще пиздец))
-        errors += ERROR_LEFT_CANAREIKA_DAMAGED;
 
     if (stack->size > stack->capacity)
-        errors += ERROR_SIZE_NUMBER;
+        errors |= ERROR_SIZE_NUMBER;
 
     return errors;
 }
@@ -229,24 +241,26 @@ int ErrorsParse(int errors)
 #undef CHECKING_ERROR
 }
 
-
 int ResizeBuffer(Stack* stk)
 {
     size_t new_capacity = (stk->capacity == 0) ? 1 : stk->capacity * 2;
 
-    size_t total_size = (new_capacity + 2) * sizeof(ElementType);
-    ElementType* new_memory = (ElementType*) realloc(stk->data - 1, total_size);
+    size_t total_size = (new_capacity + ON_DEBUG_CANARY(2) +0) * sizeof(ElementType);
+    ElementType* original_data = stk->data - ON_DEBUG_CANARY(1) +0;
+    ElementType* new_memory = (ElementType*) realloc(original_data, total_size);
     if (new_memory == NULL)
         return ERROR_REALLOCATION;
 
+#ifdef _DEBUG_CANARY
     new_memory[0] = kCanareika;
     new_memory[new_capacity + 1] = kCanareika;
+#endif //_DEBUG_CANARY
 
     // ИНИЦИАЛИЗИРУЕМ НОВЫЕ POISONЫ
-    for (size_t i = stk->capacity + 1; i <= new_capacity; i++)
+    for (size_t i = stk->capacity + ON_DEBUG_CANARY(1) +0; i < new_capacity + ON_DEBUG_CANARY(1) +0; i++)
         new_memory[i] = kPoison;
 
-    stk->data = new_memory + 1;
+    stk->data = new_memory + ON_DEBUG_CANARY(1) +0;
     stk->capacity = new_capacity;
     return 0;
 }
@@ -256,8 +270,12 @@ void PrintElement(ElementType element)
     printf("%d", element);
 }
 
-//ПОБИТОВЫЕ ОПЕРАЦИИ ВМЕСТО +=
+//ДЕЛО СДЕЛАНО ПОБИТОВЫЕ ОПЕРАЦИИ ВМЕСТО +=
 //написать мейн, показывающий различные ошибки
 //доделать условную компиляцию канареек
 //сделать хэши
 //поменяться кодом с Умаром
+
+
+//в начале проверяю hash из структуры с тем, который только что пересчитал
+//потом уже изменяю hash и помещаю его в структуру

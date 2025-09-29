@@ -5,7 +5,7 @@
 
 #include "error_types.h"
 
-#ifdef _DEBUG
+#ifdef _DEBUG_CANARY
     #define INIT(name) Stack name = {__func__, __LINE__, __FILE__, #name, NULL, 0, 0}
 #else
     #define INIT(name) Stack name = {};
@@ -14,16 +14,19 @@
 typedef int ElementType;
 
 typedef struct {
-#ifdef _DEBUG
     const char* function_name;
     int line;
     const char* file_name;
     const char* variable_name;
+} Debug;
+
+typedef struct {
+#ifdef _DEBUG_CANARY
+    Debug debug;
 #endif
     ElementType* data;
     size_t size;
     size_t capacity;
-
 } Stack;
 
 void StackCtor(Stack* stack_pointer, size_t starting_capacity);
