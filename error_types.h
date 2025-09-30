@@ -2,7 +2,7 @@
 #define ERROR_TYPES_H_
 
 typedef enum {
-    ERROR_NO                      = 0, //нахуй надо
+    ERROR_NO                      = 0,
     ERROR_PTR_FUNCTION_NAME       = 1 << 0,
     ERROR_PTR_NUMBER_LINE         = 1 << 1,
     ERROR_PTR_FILE_NAME           = 1 << 2,
@@ -16,7 +16,8 @@ typedef enum {
     ERROR_REALLOCATING            = 1 << 10,
     ERROR_ALLOCATION_FAILED       = 1 << 11,
     ERROR_REALLOCATION            = 1 << 12,
-    ERROR_NULL_PTR                = 1 << 13
+    ERROR_NULL_PTR                = 1 << 13,
+    ERROR_HASH_DIFFERENT          = 1 << 14
 } ErrorType;
 
 #endif // ERROR_TYPES_H_

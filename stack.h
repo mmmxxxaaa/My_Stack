@@ -5,10 +5,17 @@
 
 #include "error_types.h"
 
-#ifdef _DEBUG_CANARY
-    #define INIT(name) Stack name = {__func__, __LINE__, __FILE__, #name, NULL, 0, 0}
+#if defined(_DEBUG_CANARY) || defined(_DEBUG_HASH)
+    #if defined(_DEBUG_HASH)
+        // Если определен _DEBUG_HASH (с хэшем)
+        #define INIT(name) Stack name = {{__func__, __LINE__, __FILE__, #name, 0}, NULL, 0, 0}
+    #else
+        // Если определен только _DEBUG_CANARY (без хэша)
+        #define INIT(name) Stack name = {{__func__, __LINE__, __FILE__, #name}, NULL, 0, 0}
+    #endif
 #else
-    #define INIT(name) Stack name = {};
+    // Если ни один отладочный макрос не определен
+    #define INIT(name) Stack name = {NULL, 0, 0}
 #endif
 
 typedef int ElementType;
@@ -18,24 +25,27 @@ typedef struct {
     int line;
     const char* file_name;
     const char* variable_name;
+#ifdef _DEBUG_HASH
+    size_t hash;
+#endif //_DEBUG_HASH
 } Debug;
 
 typedef struct {
-#ifdef _DEBUG_CANARY
+#if defined(_DEBUG_CANARY) || defined(_DEBUG_HASH)
     Debug debug;
-#endif
+#endif //_DEBUG_CANARY
     ElementType* data;
     size_t size;
     size_t capacity;
 } Stack;
 
-void StackCtor(Stack* stack_pointer, size_t starting_capacity);
+int StackCtor(Stack* stack_pointer, size_t starting_capacity);
 void StackDtor(Stack* stack_pointer);
 
 int StackVerification(Stack* stack);
 int ErrorsParse(int errors);
 
-void StackPush(Stack* stk, ElementType value);
+int StackPush(Stack* stk, ElementType value);
 ElementType StackPop(Stack* stk);
 void StackDump(const Stack* stk, int errors, const char* msg);
 int ResizeBuffer(Stack* stk);

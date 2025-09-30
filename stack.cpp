@@ -5,20 +5,21 @@
 #include <stdio.h>
 
 #include "error_types.h"
+#include "my_defense.h"
 
 static const int kCanareika = 25022007;
 static const int kPoison = 525252;
-static const int grow_data_coefficient = 2;
+static const int kGrowDataCoefficient = 2;
 
 #ifdef _DEBUG_CANARY
     #define ON_DEBUG_CANARY(code)  code //не заигрываться с этим
 #else
     #define ON_DEBUG_CANARY(code)
-#endif
+#endif //_DEBUG_CANARY
 
-void StackCtor(Stack* stack_pointer, size_t starting_capacity)
+int StackCtor(Stack* stack_pointer, size_t starting_capacity)
 {
-    assert(stack_pointer); //FIXME ТУТ ПРИШЛОСЬ ОСТАВИТЬ ПОКА АССЕРТ ВМЕСТО ВЕРИФИКАТОРА, Т.К. ИНИЦИАЛИЗИРОВАННАЯ ВЕРСИЯ СОВПАДАЕТ С ОШИБОЧНОЙ
+    assert(stack_pointer);
     assert(starting_capacity > 0);
 
     stack_pointer -> data = (ElementType*) calloc(starting_capacity + ON_DEBUG_CANARY (2) +0, sizeof(ElementType)); //+0 воспринимается просто как 0
@@ -26,7 +27,7 @@ void StackCtor(Stack* stack_pointer, size_t starting_capacity)
     {
         int errors = ERROR_ALLOCATION_FAILED;
         StackDump(stack_pointer, errors, "Allocating memory in StackCtor failed");
-        return;
+        return errors;
     }
 
 #ifdef _DEBUG_CANARY
@@ -43,15 +44,20 @@ void StackCtor(Stack* stack_pointer, size_t starting_capacity)
 #endif // _DEBUG_CANARY
     stack_pointer -> size = 0;
     stack_pointer -> capacity = starting_capacity;
+
+#ifdef _DEBUG_HASH
+    size_t starting_hash = CalculateHash(stack_pointer);
+    stack_pointer->debug.hash = starting_hash;
+#endif //_DEBUG_HASH
+    return ERROR_NO;
 }
 
 void StackDtor(Stack* stack_pointer)
 {
-    int errors = StackVerification(stack_pointer); //ассерт не нужен, т.к. верификатор проверяет указатель
+    int errors = StackVerification(stack_pointer);
     if (errors != 0)
     {
         StackDump(stack_pointer, errors, "StackDtor failed");
-        return;
     }
 
     if (stack_pointer -> data)
@@ -65,15 +71,25 @@ void StackDtor(Stack* stack_pointer)
     stack_pointer -> data = NULL;
     stack_pointer -> size = 0;
     stack_pointer -> capacity = 0;
+#if defined(_DEBUG_HASH) || defined(_DEBUG_CANARY)
+    stack_pointer -> debug.function_name = NULL;
+    stack_pointer -> debug.line = 0;
+    stack_pointer -> debug.file_name = 0;
+    stack_pointer -> debug.variable_name = 0;
+#endif //defined(_DEBUG_HASH) || defined(_DEBUG_CANARY)
+
+#ifdef _DEBUG_HASH
+    stack_pointer->debug.hash = 0;
+#endif //DEBUG_HASH
 }
 
-void StackPush(Stack* stk, ElementType value)
+int StackPush(Stack* stk, ElementType value)
 {
     int errors = StackVerification(stk); //ассерт не нужен, т.к. верификатор проверяет указатель
     if (errors != 0)
     {
         StackDump(stk, errors, "StackPush failed");
-        return;
+        return errors;
     }
     if (stk->size == stk->capacity)
     {
@@ -81,11 +97,14 @@ void StackPush(Stack* stk, ElementType value)
         if (errors != 0)
         {
             StackDump(stk, errors, "Reallocating in StackPush failed");
-            return;
+            return errors;
         }
     }
-
     stk -> data[stk->size++] = value;
+#ifdef _DEBUG_HASH
+    stk -> debug.hash = CalculateHash(stk);
+#endif //_DEBUG_HASH
+    return ERROR_NO;
 }
 
 ElementType StackPop(Stack* stk)
@@ -109,13 +128,15 @@ ElementType StackPop(Stack* stk)
     stk -> data[current_size - 1] = kPoison;
     stk -> size = current_size - 1;
 
+#ifdef _DEBUG_HASH
+    stk -> debug.hash = CalculateHash(stk);
+#endif //_DEBUG_HASH
     errors = StackVerification(stk);
     if (errors != 0)
     {
         StackDump(stk, errors, "cannot Pop the element");
         return kPoison;
     }
-
     return element;
 }
 
@@ -137,10 +158,10 @@ void StackDump(const Stack* stk, int errors, const char* msg)
     printf("stack [%p] %s (", stk, msg);
     ErrorsParse(errors);
 
-#ifdef _DEBUG_CANARY //FIXME написать функцию перевода числа в двоичный вид, чтобы выводить
+#if defined(_DEBUG_CANARY) || defined(_DEBUG_HASH)
     printf("Err%d) from %s at %s %d\n", errors, stk->debug.function_name, stk->debug.file_name, stk->debug.line);
 #else
-    printf("Err%d)\n", errors); //выводить ошибки в двоичном виде
+    printf("Err%d)\n", errors);
 #endif //_DEBUG_CANARY
     printf("    {\n");
     printf("    size = %lu\n", stack_size_only_elements);
@@ -148,10 +169,11 @@ void StackDump(const Stack* stk, int errors, const char* msg)
     printf("    data [%p]\n", real_data_start);
     printf("        {\n");
 
+#ifdef _DEBUG_CANARY
     printf("         [0] = ");
     PrintElement(real_data_start[0]);
     printf(" (LEFT CANAREIKA)\n");
-
+#endif //_DEBUG_CANARY
     for (size_t i = 0; i < stack_size_only_elements; i++)
     {
         printf("        *[%lu] = ", i + 1); // +1 потому что реальные индексы с 1
@@ -165,10 +187,11 @@ void StackDump(const Stack* stk, int errors, const char* msg)
         printf(" (POISON)\n");
     }
 
+#ifdef _DEBUG_CANARY
     printf("         [%lu] = ", stack_capacity + 1);
     PrintElement(stk->data[stack_capacity]);
     printf(" (RIGHT CANAREIKA)\n");
-
+#endif //_DEBUG_CANARY
     printf("        }\n");
     printf("}\n");
 }
@@ -179,7 +202,8 @@ int StackVerification(Stack* stack)
         return ERROR_NULL_PTR;
 
     int errors = 0;
-#ifdef _DEBUG_CANARY
+
+#if defined(_DEBUG_HASH) || defined(_DEBUG_CANARY)
     if (stack -> debug.function_name == NULL)
         errors |= ERROR_PTR_FUNCTION_NAME;
 
@@ -191,14 +215,21 @@ int StackVerification(Stack* stack)
 
     if (stack -> debug.variable_name == NULL)
         errors |= ERROR_PTR_VARIABLE_NAME;
+#endif //_DEBUG_HASH | _DEBUG_CANARY
 
-    //FIXME канарейки в условную компиляцию
-    if (stack -> data[stack->capacity] != kCanareika) //если data = null, то эти проверки положат программу, надо бы их внутрь проверки на null засунуть
+#ifdef _DEBUG_CANARY
+    if (stack -> data[stack->capacity] != kCanareika)
         errors |= ERROR_RIGHT_CANAREIKA_DAMAGED;
 
-    if (stack -> data[-1] != kCanareika) //ваще пиздец))
+    if (stack -> data[-1] != kCanareika)
         errors |= ERROR_LEFT_CANAREIKA_DAMAGED;
 #endif //_DEBUG_CANARY
+
+#ifdef _DEBUG_HASH
+    if (!CompareHashOldWithNew(stack))
+        errors |= ERROR_HASH_DIFFERENT;
+#endif //_DEBUG_HASH
+
     if (stack -> data == NULL)
     {
         errors |= ERROR_PTR_DATA;
@@ -211,7 +242,6 @@ int StackVerification(Stack* stack)
         return errors; //дальше нечего проверять
     }
 
-
     if (stack->size > stack->capacity)
         errors |= ERROR_SIZE_NUMBER;
 
@@ -220,7 +250,6 @@ int StackVerification(Stack* stack)
 
 int ErrorsParse(int errors)
 {
-#define CHECKING_ERROR(s)  // FIXME заменяет две строки с ифом на одну
     if (errors == 0)
         return 0;
 
@@ -237,13 +266,15 @@ int ErrorsParse(int errors)
         printf("ERROR_RIGHT_CANAREIKA_DAMAGED ");
     if (errors & ERROR_LEFT_CANAREIKA_DAMAGED)
         printf("ERROR_LEFT_CANAREIKA_DAMAGED ");
+
+    if (errors & ERROR_HASH_DIFFERENT)
+        printf("ERROR_HASH_DIFFERENT ");
     return 1;
-#undef CHECKING_ERROR
 }
 
 int ResizeBuffer(Stack* stk)
 {
-    size_t new_capacity = (stk->capacity == 0) ? 1 : stk->capacity * 2;
+    size_t new_capacity = (stk->capacity == 0) ? 1 : stk->capacity * kGrowDataCoefficient;
 
     size_t total_size = (new_capacity + ON_DEBUG_CANARY(2) +0) * sizeof(ElementType);
     ElementType* original_data = stk->data - ON_DEBUG_CANARY(1) +0;
@@ -262,6 +293,9 @@ int ResizeBuffer(Stack* stk)
 
     stk->data = new_memory + ON_DEBUG_CANARY(1) +0;
     stk->capacity = new_capacity;
+#ifdef _DEBUG_HASH
+    stk -> debug.hash = CalculateHash(stk);
+#endif //_DEBUG_HASH
     return 0;
 }
 
@@ -272,8 +306,8 @@ void PrintElement(ElementType element)
 
 //ДЕЛО СДЕЛАНО ПОБИТОВЫЕ ОПЕРАЦИИ ВМЕСТО +=
 //написать мейн, показывающий различные ошибки
-//доделать условную компиляцию канареек
-//сделать хэши
+//ДЕЛО СДЕЛАНО доделать условную компиляцию канареек
+//ДЕЛО СДЕЛАНО сделать хэши
 //поменяться кодом с Умаром
 
 

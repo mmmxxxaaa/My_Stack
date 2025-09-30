@@ -14,12 +14,13 @@ CXXFLAGS := -ggdb3 -std=c++17 -O0 -Wall -Wextra -Weffc++ -Waggressive-loop-optim
     -Wlarger-than=8192 -Wstack-usage=8192 -pie -fPIE -Werror=vla \
     -fsanitize=address,alignment,bool,bounds,enum,float-cast-overflow,float-divide-by-zero,integer-divide-by-zero,leak,nonnull-attribute,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,undefined,unreachable,vla-bound,vptr
 
-SRC_FILES := main.cpp stack.cpp murmur3.cpp
+SRC_FILES := main.cpp stack.cpp my_defense.cpp
 OBJ_FILES := $(SRC_FILES:.cpp=.o)
 
 all: clean stack
 
-debug: CXXFLAGS += -D _DEBUG_CANARY
+# debug: CXXFLAGS += -D _DEBUG_CANARY
+debug: CXXFLAGS += -D _DEBUG_HASH
 debug: all
 
 stack: $(OBJ_FILES)

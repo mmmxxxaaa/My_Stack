@@ -4,13 +4,13 @@
 #include "error_types.h"
 #include "stack.h"
 
-static const size_t starting_capacity = 1;
+static const size_t kStartingCapacity = 1;
 
 int main()
 {
     INIT(stk1);
-    StackCtor(&stk1, starting_capacity);
-//FIXME придумать различные тесты-проверки
+    StackCtor(&stk1, kStartingCapacity);
+
 //1-------------------------------------------------------------------------------------------------
 //Попытка вызвать Pop, когда стек пустой + проверка реаллокации
     StackPush(&stk1, 10);
